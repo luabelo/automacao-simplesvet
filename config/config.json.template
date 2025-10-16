@@ -1,0 +1,24 @@
+{
+  "simplesvet": {
+    "urls": {
+      "login": "https://app.simples.vet/login/login.php"
+    },
+    "credentials": {
+      "email": "SEU_EMAIL_AQUI",
+      "password": "SUA_SENHA_AQUI"
+    },
+    "date_range": {
+      "start_date": "2025-10-01",
+      "end_date": "2025-10-31"
+    }
+  },
+  "browser": {
+    "type": "chrome",
+    "headless": false,
+    "wait_timeout": 10
+  },
+  "logging": {
+    "level": "INFO",
+    "file_enabled": true
+  }
+}

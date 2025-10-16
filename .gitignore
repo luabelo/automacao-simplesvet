@@ -1,0 +1,17 @@
+logs/*
+!logs/.gitkeep
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+.conda/
+
+config/config.json
+
+downloads/
+*.tmp
+*.temp
