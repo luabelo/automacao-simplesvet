@@ -13,7 +13,7 @@ class PDFConverter:
     def __init__(self):
         pass
     
-    def convert_pdf_to_excel(self, pdf_path: str) -> Optional[str]:
+    def convert_pdf_to_excel(self, pdf_path: str, month_str: str = None) -> Optional[str]:
         """Converte PDF de agendamentos para Excel com dados estruturados"""
         logger.info(f"Iniciando conversão do PDF: {pdf_path}")
         
@@ -33,7 +33,12 @@ class PDFConverter:
             df = pd.DataFrame(appointments_data)
             
             # Cria nome do arquivo Excel
-            excel_path = pdf_path.replace('.pdf', '.xlsx')
+            if month_str:
+                # Remove extensão .pdf e adiciona .xlsx
+                base_path = pdf_path.replace('.pdf', '')
+                excel_path = f"{base_path}.xlsx"
+            else:
+                excel_path = pdf_path.replace('.pdf', '.xlsx')
             
             # Salva como Excel
             with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:

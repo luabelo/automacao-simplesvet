@@ -16,7 +16,7 @@ class AppointmentExtractor:
         self.config = config
         self.pdf_converter = PDFConverter()
     
-    def extract_appointments(self, start_date: str, end_date: str) -> List[Dict]:
+    def extract_appointments(self, start_date: str, end_date: str, month_str: str = None) -> List[Dict]:
         """Extrai agendamentos do período especificado via URL direta do relatório"""
         logger.info(f"Iniciando extração de agendamentos de {start_date} até {end_date}")
         
@@ -29,13 +29,13 @@ class AppointmentExtractor:
             return []
         
         # Faz o download do PDF diretamente via URL
-        pdf_file = self.download_appointments_pdf_direct(formatted_start, formatted_end)
+        pdf_file = self.download_appointments_pdf_direct(formatted_start, formatted_end, month_str)
         if not pdf_file:
             logger.error("Falha ao fazer download do PDF de agendamentos")
             return []
         
         # Converte PDF para Excel e extrai dados estruturados
-        excel_file = self.pdf_converter.convert_pdf_to_excel(pdf_file)
+        excel_file = self.pdf_converter.convert_pdf_to_excel(pdf_file, month_str)
         
         appointments = []
         
@@ -47,6 +47,7 @@ class AppointmentExtractor:
                 "download_time": time.time(),
                 "date_range": f"{start_date} to {end_date}",
                 "formatted_date_range": f"{formatted_start}-{formatted_end}",
+                "month": month_str,
                 "status": "converted_to_excel"
             })
         else:
@@ -57,6 +58,7 @@ class AppointmentExtractor:
                 "download_time": time.time(),
                 "date_range": f"{start_date} to {end_date}",
                 "formatted_date_range": f"{formatted_start}-{formatted_end}",
+                "month": month_str,
                 "status": "pdf_only"
             })
         
@@ -73,7 +75,7 @@ class AppointmentExtractor:
             logger.error(f"Erro ao converter data {date_str}: {str(e)}")
             return None
     
-    def download_appointments_pdf_direct(self, start_date: str, end_date: str) -> Optional[str]:
+    def download_appointments_pdf_direct(self, start_date: str, end_date: str, month_str: str = None) -> Optional[str]:
         """Faz o download do PDF através da URL direta do relatório"""
         logger.info(f"Fazendo download direto do PDF para período {start_date} - {end_date}")
         
@@ -93,13 +95,19 @@ class AppointmentExtractor:
                 logger.error("Erro ao configurar diretório de download")
                 return None
             
+            # Define o nome base do arquivo
+            if month_str:
+                base_filename = f"{month_str}-agendamentos"
+            else:
+                base_filename = f"agendamentos_{start_date.replace('/', '_')}_{end_date.replace('/', '_')}"
+            
             # Método 1: Tenta forçar download via JavaScript
             try:
                 logger.info("Tentando forçar download via JavaScript...")
                 js_download = f"""
                 var link = document.createElement('a');
                 link.href = '{report_url}';
-                link.download = 'agendamentos_{start_date}_{end_date}.pdf';
+                link.download = '{base_filename}.pdf';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -110,7 +118,7 @@ class AppointmentExtractor:
                 time.sleep(3)
                 
                 # Verifica se o download começou
-                pdf_file = self._wait_for_pdf_download(download_dir, timeout=15)
+                pdf_file = self._wait_for_pdf_download(download_dir, timeout=15, expected_name=base_filename)
                 if pdf_file:
                     logger.info(f"✅ PDF baixado via JavaScript: {pdf_file}")
                     return pdf_file
@@ -143,7 +151,7 @@ class AppointmentExtractor:
                 actions.send_keys(Keys.ENTER).perform()
                 time.sleep(2)
                 
-                pdf_file = self._wait_for_pdf_download(download_dir, timeout=15)
+                pdf_file = self._wait_for_pdf_download(download_dir, timeout=15, expected_name=base_filename)
                 if pdf_file:
                     logger.info(f"✅ PDF baixado via Ctrl+S: {pdf_file}")
                     return pdf_file
@@ -172,7 +180,7 @@ class AppointmentExtractor:
                 response = session.get(report_url, headers=headers, stream=True)
                 
                 if response.status_code == 200:
-                    filename = f"agendamentos_{start_date.replace('/', '_')}_{end_date.replace('/', '_')}.pdf"
+                    filename = f"{base_filename}.pdf"
                     file_path = os.path.join(download_dir, filename)
                     
                     with open(file_path, 'wb') as f:
@@ -211,7 +219,7 @@ class AppointmentExtractor:
             logger.error(f"Erro ao configurar diretório de download: {str(e)}")
             return None
     
-    def _wait_for_pdf_download(self, download_dir: str, timeout: int = 30) -> Optional[str]:
+    def _wait_for_pdf_download(self, download_dir: str, timeout: int = 30, expected_name: str = None) -> Optional[str]:
         """Aguarda o download do PDF ser concluído"""
         logger.info(f"Aguardando download do PDF em: {download_dir}")
         
@@ -233,6 +241,19 @@ class AppointmentExtractor:
                     file_path = os.path.join(download_dir, file)
                     # Verifica se o arquivo não está sendo escrito (tamanho estável)
                     if self._is_file_complete(file_path):
+                        # Se temos um nome esperado e o arquivo não tem esse nome, renomeia
+                        if expected_name and not file.startswith(expected_name):
+                            new_path = os.path.join(download_dir, f"{expected_name}.pdf")
+                            try:
+                                # Se já existe um arquivo com esse nome, remove
+                                if os.path.exists(new_path):
+                                    os.remove(new_path)
+                                os.rename(file_path, new_path)
+                                logger.info(f"Arquivo renomeado para: {new_path}")
+                                return new_path
+                            except Exception as e:
+                                logger.warning(f"Erro ao renomear arquivo: {e}")
+                                return file_path
                         return file_path
             
             # Verifica se existe algum arquivo .crdownload (Chrome) sendo baixado

@@ -62,11 +62,6 @@ class WebDriverManager:
         if self.headless:
             options.add_argument('--headless')
         
-<<<<<<< Updated upstream
-        # Opções adicionais para melhor compatibilidade
-||||||| Stash base
-        # Opções para melhor compatibilidade e performance
-=======
         # Configura diretório de download
         download_dir = self._get_download_directory()
         if download_dir:
@@ -79,7 +74,6 @@ class WebDriverManager:
             options.add_experimental_option("prefs", prefs)
         
         # Opções para melhor compatibilidade e performance
->>>>>>> Stashed changes
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')

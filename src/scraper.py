@@ -30,22 +30,24 @@ class SimplesVetScraper:
             logger.error("   - password: Sua senha do SimplesVet")
             return False
         
-        start_date, end_date = config.get_date_range()
-        if not start_date or not end_date:
-            logger.error("❌ Período de datas não configurado!")
-            logger.error("   Configure start_date e end_date no arquivo config/config.json")
+        months = config.get_months()
+        if not months or len(months) == 0:
+            logger.error("❌ Lista de meses não configurada!")
+            logger.error("   Configure a lista 'months' no arquivo config/config.json")
+            logger.error("   Exemplo: \"months\": [\"202509\", \"202510\"]")
             return False
         
-        try:
-            datetime.strptime(start_date, '%Y-%m-%d')
-            datetime.strptime(end_date, '%Y-%m-%d')
-        except ValueError:
-            logger.error("❌ Formato de data inválido! Use o formato YYYY-MM-DD")
-            return False
+        # Valida cada mês
+        for month_str in months:
+            try:
+                config.get_date_range_from_month(month_str)
+            except ValueError as e:
+                logger.error(f"❌ {e}")
+                return False
         
         logger.info("✅ Configuração válida!")
         logger.info(f"   Email: {config.get_credential('simplesvet', 'email')}")
-        logger.info(f"   Período: {start_date} até {end_date}")
+        logger.info(f"   Meses para processar: {', '.join(months)}")
         
         return True
     
@@ -94,18 +96,30 @@ class SimplesVetScraper:
                 
                 print("✅ Login realizado com sucesso!")
                 
-                # Obtém período configurado
-                start_date, end_date = self.config.get_date_range()
+                # Obtém lista de meses configurados
+                months = self.config.get_months()
                 
-                # Extrai dados de atendimentos
-                print(f"📋 Extraindo atendimentos de {start_date} até {end_date}...")
-                appointments = self.simplesvet.get_appointments_data(start_date, end_date)
-                
-                if appointments:
-                    print(f"✅ {len(appointments)} atendimentos extraídos com sucesso!")
-                    logger.info(f"Dados extraídos: {len(appointments)} registros")
-                else:
-                    print("⚠️  Nenhum atendimento encontrado no período especificado")
+                # Processa cada mês individualmente
+                for month_str in months:
+                    try:
+                        # Converte mês em range de datas
+                        start_date, end_date = self.config.get_date_range_from_month(month_str)
+                        
+                        # Extrai dados de atendimentos para o mês
+                        print(f"\n📋 Processando mês {month_str} ({start_date} até {end_date})...")
+                        appointments = self.simplesvet.get_appointments_data(
+                            start_date, end_date, month_str
+                        )
+                        
+                        if appointments:
+                            print(f"✅ {len(appointments)} atendimentos extraídos para {month_str}!")
+                            logger.info(f"Dados extraídos para {month_str}: {len(appointments)} registros")
+                        else:
+                            print(f"⚠️  Nenhum atendimento encontrado para {month_str}")
+                            
+                    except Exception as e:
+                        logger.error(f"Erro ao processar mês {month_str}: {e}")
+                        print(f"❌ Erro ao processar mês {month_str}: {e}")
                 
                 # Realiza logout
                 print("🚪 Realizando logout...")

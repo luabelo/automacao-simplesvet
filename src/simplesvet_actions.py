@@ -75,7 +75,14 @@ class SimplesVetActions:
         try:
             logger.info("Iniciando processo de login...")
             
-            login_url = self.config.get_config('simplesvet', 'login_url')
+            # Obtém a URL de login corretamente
+            urls = self.config.get_config('simplesvet', 'urls')
+            login_url = urls.get('login') if urls else None
+            
+            if not login_url:
+                logger.error("URL de login não configurada")
+                return False
+            
             if not self.webdriver_manager.navigate_to(login_url):
                 return False
             
@@ -226,13 +233,14 @@ class SimplesVetActions:
             logger.error(f"Erro durante o logout: {e}")
             return False
     
-    def get_appointments_data(self, start_date: str = None, end_date: str = None) -> list:
+    def get_appointments_data(self, start_date: str = None, end_date: str = None, month_str: str = None) -> list:
         """
         Extrai dados de atendimentos do SimplesVet
         
         Args:
             start_date: Data de início (formato YYYY-MM-DD)
             end_date: Data de fim (formato YYYY-MM-DD)
+            month_str: Mês no formato YYYYMM (usado para nome do arquivo)
             
         Returns:
             Lista com dados dos atendimentos
@@ -242,27 +250,16 @@ class SimplesVetActions:
                 logger.error("Usuário não está logado")
                 return []
             
-            # Se não foram fornecidas datas, usa as do config
-            if not start_date or not end_date:
-                start_date, end_date = self.config.get_date_range()
+            logger.info(f"Buscando atendamentos de {start_date} até {end_date}")
             
-            logger.info(f"Buscando atendimentos de {start_date} até {end_date}")
-            
-<<<<<<< Updated upstream
-            # TODO: Implementar a extração de dados de atendimentos
-            # Esta é a estrutura base - você pode adicionar a lógica específica aqui
-            
-            appointments = []
-||||||| Stash base
-            appointments = []
-=======
             # Usa o AppointmentExtractor para extrair os agendamentos
             if self.appointment_extractor:
-                appointments = self.appointment_extractor.extract_appointments(start_date, end_date)
+                appointments = self.appointment_extractor.extract_appointments(
+                    start_date, end_date, month_str
+                )
             else:
                 logger.error("AppointmentExtractor não foi inicializado")
                 appointments = []
->>>>>>> Stashed changes
             
             logger.info(f"Encontrados {len(appointments)} atendimentos")
             return appointments

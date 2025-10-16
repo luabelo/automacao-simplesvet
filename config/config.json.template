@@ -7,10 +7,10 @@
       "email": "SEU_EMAIL_AQUI",
       "password": "SUA_SENHA_AQUI"
     },
-    "date_range": {
-      "start_date": "2025-10-01",
-      "end_date": "2025-10-31"
-    }
+    "months": [
+      "YYYYMM", 
+      "YYYYMM"
+    ]
   },
   "browser": {
     "type": "chrome",

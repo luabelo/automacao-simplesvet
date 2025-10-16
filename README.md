@@ -24,7 +24,7 @@ pip install -r requirements.txt
 2. Edite o arquivo `config/config.json` e substitua:
    - `SEU_EMAIL_AQUI` pelo seu email do SimplesVet
    - `SUA_SENHA_AQUI` pela sua senha do SimplesVet
-   - Configure as datas de início e fim conforme necessário
+   - Configure a lista de meses que deseja baixar (formato `YYYYMM`)
 
 **Exemplo:**
 ```json
@@ -34,13 +34,16 @@ pip install -r requirements.txt
       "email": "meu.email@gmail.com",
       "password": "minha.senha"
     },
-    "date_range": {
-      "start_date": "2025-10-01",
-      "end_date": "2025-10-31"
-    }
+    "months": [
+      "202509",
+      "202510",
+      "202511"
+    ]
   }
 }
 ```
+
+O sistema irá processar cada mês individualmente.
 
 ### 3. Executar
 

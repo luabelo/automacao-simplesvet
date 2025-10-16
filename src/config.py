@@ -1,7 +1,9 @@
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
+from datetime import datetime
+from calendar import monthrange
 
 
 class Config:
@@ -79,21 +81,56 @@ class Config:
         except KeyError:
             return None
     
-    def get_date_range(self, section: str = 'simplesvet') -> tuple:
+    def get_months(self, section: str = 'simplesvet') -> List[str]:
         """
-        Obtém o período de datas configurado
+        Obtém a lista de meses configurados
         
         Args:
             section: Seção da configuração
             
         Returns:
-            Tupla com (data_inicio, data_fim)
+            Lista de meses no formato YYYYMM
         """
         try:
-            date_range = self.get_config(section, 'date_range')
-            return date_range['start_date'], date_range['end_date']
+            months = self.get_config(section, 'months')
+            if not isinstance(months, list):
+                return []
+            return months
         except KeyError:
-            return None, None
+            return []
+    
+    def get_date_range_from_month(self, month_str: str) -> Tuple[str, str]:
+        """
+        Converte um mês (YYYYMM) em um range de datas (primeiro e último dia do mês)
+        
+        Args:
+            month_str: Mês no formato YYYYMM (ex: "202509")
+            
+        Returns:
+            Tupla com (data_inicio, data_fim) no formato YYYY-MM-DD
+        """
+        try:
+            # Valida o formato
+            if len(month_str) != 6 or not month_str.isdigit():
+                raise ValueError(f"Formato de mês inválido: {month_str}. Use YYYYMM (ex: 202509)")
+            
+            year = int(month_str[:4])
+            month = int(month_str[4:])
+            
+            if month < 1 or month > 12:
+                raise ValueError(f"Mês inválido: {month}. Deve estar entre 01 e 12")
+            
+            # Primeiro dia do mês
+            start_date = f"{year:04d}-{month:02d}-01"
+            
+            # Último dia do mês
+            last_day = monthrange(year, month)[1]
+            end_date = f"{year:04d}-{month:02d}-{last_day:02d}"
+            
+            return start_date, end_date
+            
+        except Exception as e:
+            raise ValueError(f"Erro ao processar mês {month_str}: {e}")
     
     def validate_credentials(self, section: str = 'simplesvet') -> bool:
         """
