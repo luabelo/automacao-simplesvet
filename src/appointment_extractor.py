@@ -126,38 +126,21 @@ class AppointmentExtractor:
             except Exception as e:
                 logger.warning(f"Método JavaScript falhou: {str(e)}")
             
-            # Método 2: Navega para URL e tenta Ctrl+S
-            logger.info("Tentando navegação direta e Ctrl+S...")
+            # Método 2: Navega para URL (navegador pode fazer download automático)
+            logger.info("Tentando navegação direta (download automático do navegador)...")
             if not self.webdriver_manager.navigate_to(report_url):
                 logger.error("Erro ao navegar para URL do relatório")
                 return None
             
-            # Aguarda a página carregar
+            # Aguarda o download automático
+            logger.info("Aguardando download automático do navegador...")
             time.sleep(5)
             
-            # Tenta usar Ctrl+S para salvar
-            try:
-                from selenium.webdriver.common.keys import Keys
-                from selenium.webdriver.common.action_chains import ActionChains
-                
-                # Pressiona Ctrl+S
-                actions = ActionChains(driver)
-                actions.key_down(Keys.CONTROL).send_keys('s').key_up(Keys.CONTROL).perform()
-                
-                logger.info("Comando Ctrl+S enviado")
-                time.sleep(2)
-                
-                # Pressiona Enter para confirmar o salvamento (caso abra diálogo)
-                actions.send_keys(Keys.ENTER).perform()
-                time.sleep(2)
-                
-                pdf_file = self._wait_for_pdf_download(download_dir, timeout=15, expected_name=base_filename)
-                if pdf_file:
-                    logger.info(f"✅ PDF baixado via Ctrl+S: {pdf_file}")
-                    return pdf_file
-                    
-            except Exception as e:
-                logger.warning(f"Método Ctrl+S falhou: {str(e)}")
+            # Verifica se algum PDF foi baixado (incluindo doc.pdf)
+            pdf_file = self._wait_for_pdf_download(download_dir, timeout=15, expected_name=base_filename)
+            if pdf_file:
+                logger.info(f"✅ PDF baixado via navegação direta: {pdf_file}")
+                return pdf_file
             
             # Método 3: Usa requests para baixar diretamente
             logger.info("Tentando download direto via requests...")
@@ -188,6 +171,10 @@ class AppointmentExtractor:
                             f.write(chunk)
                     
                     logger.info(f"✅ PDF baixado via requests: {file_path}")
+                    
+                    # Remove arquivos doc.pdf duplicados que podem ter sido baixados automaticamente
+                    self._cleanup_duplicate_pdfs(download_dir, base_filename)
+                    
                     return file_path
                 else:
                     logger.error(f"Erro no download via requests: {response.status_code}")
@@ -220,7 +207,7 @@ class AppointmentExtractor:
             return None
     
     def _wait_for_pdf_download(self, download_dir: str, timeout: int = 30, expected_name: str = None) -> Optional[str]:
-        """Aguarda o download do PDF ser concluído"""
+        """Aguarda o download do PDF ser concluído e renomeia se necessário"""
         logger.info(f"Aguardando download do PDF em: {download_dir}")
         
         start_time = time.time()
@@ -236,25 +223,41 @@ class AppointmentExtractor:
             new_files = current_files - initial_files
             
             # Procura por arquivos PDF que não sejam temporários
-            for file in new_files:
-                if file.endswith('.pdf') and not file.endswith('.tmp'):
-                    file_path = os.path.join(download_dir, file)
-                    # Verifica se o arquivo não está sendo escrito (tamanho estável)
-                    if self._is_file_complete(file_path):
-                        # Se temos um nome esperado e o arquivo não tem esse nome, renomeia
-                        if expected_name and not file.startswith(expected_name):
-                            new_path = os.path.join(download_dir, f"{expected_name}.pdf")
+            pdf_files = [f for f in new_files if f.endswith('.pdf') and not f.endswith('.tmp')]
+            
+            for file in pdf_files:
+                file_path = os.path.join(download_dir, file)
+                
+                # Verifica se o arquivo não está sendo escrito (tamanho estável)
+                if self._is_file_complete(file_path):
+                    logger.info(f"PDF encontrado: {file}")
+                    
+                    # Se temos um nome esperado e o arquivo não tem esse nome, renomeia
+                    if expected_name:
+                        expected_filename = f"{expected_name}.pdf"
+                        
+                        # Se o arquivo não é o esperado (ex: doc.pdf ao invés de 202510-agendamentos.pdf)
+                        if file != expected_filename:
+                            new_path = os.path.join(download_dir, expected_filename)
                             try:
-                                # Se já existe um arquivo com esse nome, remove
+                                # Se já existe um arquivo com esse nome, remove o antigo
                                 if os.path.exists(new_path):
+                                    logger.info(f"Removendo arquivo antigo: {expected_filename}")
                                     os.remove(new_path)
+                                
+                                # Renomeia o arquivo baixado
                                 os.rename(file_path, new_path)
-                                logger.info(f"Arquivo renomeado para: {new_path}")
+                                logger.info(f"✅ Arquivo renomeado de '{file}' para '{expected_filename}'")
                                 return new_path
                             except Exception as e:
                                 logger.warning(f"Erro ao renomear arquivo: {e}")
                                 return file_path
-                        return file_path
+                        else:
+                            logger.info(f"✅ Arquivo já tem o nome correto: {file}")
+                            return file_path
+                    
+                    # Se não tem nome esperado, retorna o que foi encontrado
+                    return file_path
             
             # Verifica se existe algum arquivo .crdownload (Chrome) sendo baixado
             downloading_files = [f for f in current_files if f.endswith('.crdownload')]
@@ -278,6 +281,34 @@ class AppointmentExtractor:
             
         except Exception:
             return False
+    
+    def _cleanup_duplicate_pdfs(self, download_dir: str, expected_basename: str):
+        """Remove PDFs duplicados (como doc.pdf) que não são o arquivo esperado"""
+        try:
+            if not os.path.exists(download_dir):
+                return
+            
+            expected_filename = f"{expected_basename}.pdf"
+            files_to_remove = []
+            
+            # Procura por arquivos PDF que não são o esperado
+            for file in os.listdir(download_dir):
+                if file.endswith('.pdf') and file != expected_filename:
+                    # Remove arquivos como doc.pdf, doc (1).pdf, etc.
+                    if file.startswith('doc'):
+                        files_to_remove.append(file)
+            
+            # Remove os arquivos encontrados
+            for file in files_to_remove:
+                try:
+                    file_path = os.path.join(download_dir, file)
+                    os.remove(file_path)
+                    logger.info(f"🗑️  Removido arquivo duplicado: {file}")
+                except Exception as e:
+                    logger.warning(f"Erro ao remover arquivo duplicado {file}: {e}")
+                    
+        except Exception as e:
+            logger.warning(f"Erro ao limpar arquivos duplicados: {e}")
 
     def set_date_filter(self, start_date: str, end_date: str) -> bool:
         """Método mantido para compatibilidade - não usado na nova implementação"""
