@@ -3,6 +3,7 @@ from typing import Optional
 from .config import Config
 from .webdriver_manager import WebDriverManager
 from .appointment_extractor import AppointmentExtractor
+from .venda_extractor import VendaExtractor
 from .logger import logger
 
 
@@ -17,6 +18,7 @@ class SimplesVetActions:
         self.config = config
         self.webdriver_manager: Optional[WebDriverManager] = None
         self.appointment_extractor: Optional[AppointmentExtractor] = None
+        self.venda_extractor: Optional[VendaExtractor] = None
         self.is_logged_in = False
         
         # Inicializa o WebDriver com configurações do config.json
@@ -29,6 +31,8 @@ class SimplesVetActions:
         
         # Inicializa AppointmentExtractor
         self.appointment_extractor = AppointmentExtractor(self.webdriver_manager, self.config)
+        # Inicializa VendaExtractor
+        self.venda_extractor = VendaExtractor(self.webdriver_manager, self.config)
     
     def start_browser(self) -> bool:
         """
@@ -86,7 +90,7 @@ class SimplesVetActions:
             if not self.webdriver_manager.navigate_to(login_url):
                 return False
             
-            time.sleep(3)
+            time.sleep(1)
             
             # Obtém credenciais
             email = self.config.get_credential('simplesvet', 'email')
@@ -146,7 +150,7 @@ class SimplesVetActions:
             login_button.click()
             logger.info("Botão de login clicado")
             
-            time.sleep(5)
+            time.sleep(1)
             
             if self._verify_login():
                 logger.info("Login realizado com sucesso!")
@@ -200,38 +204,6 @@ class SimplesVetActions:
             logger.error(f"Erro ao verificar login: {e}")
             return False
     
-    def logout(self) -> bool:
-        """
-        Realiza o logout do sistema
-        
-        Returns:
-            True se o logout foi realizado com sucesso
-        """
-        try:
-            logger.info("Realizando logout...")
-            
-            logout_selectors = [
-                'a[href*="logout"]',
-                'button[onclick*="logout"]',
-                '.logout',
-                '#logout',
-                '[data-action="logout"]'
-            ]
-            
-            logout_element = self._find_element_by_selectors(logout_selectors)
-            if logout_element:
-                logout_element.click()
-                time.sleep(3)
-                self.is_logged_in = False
-                logger.info("Logout realizado com sucesso")
-                return True
-            else:
-                logger.warning("Botão de logout não encontrado")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Erro durante o logout: {e}")
-            return False
     
     def get_appointments_data(self, start_date: str = None, end_date: str = None, month_str: str = None) -> list:
         """
@@ -261,11 +233,48 @@ class SimplesVetActions:
                 logger.error("AppointmentExtractor não foi inicializado")
                 appointments = []
             
-            logger.info(f"Encontrados {len(appointments)} atendimentos")
+            # Calcula o total de agendamentos extraídos
+            total_appointments = sum(item.get('appointments_count', 0) for item in appointments)
+            logger.info(f"Encontrados {total_appointments} agendamentos em {len(appointments)} arquivo(s)")
             return appointments
             
         except Exception as e:
             logger.error(f"Erro ao extrair dados de atendimentos: {e}")
+            return []
+    
+    def get_vendas_data(self, start_date: str = None, end_date: str = None, month_str: str = None) -> list:
+        """
+        Extrai dados de vendas do SimplesVet
+        
+        Args:
+            start_date: Data de início (formato YYYY-MM-DD)
+            end_date: Data de fim (formato YYYY-MM-DD)
+            month_str: Mês no formato YYYYMM (usado para nome do arquivo)
+            
+        Returns:
+            Lista com caminho do arquivo Excel gerado
+        """
+        try:
+            if not self.is_logged_in:
+                logger.error("Usuário não está logado")
+                return []
+            
+            logger.info(f"Buscando vendas de {start_date} até {end_date}")
+            
+            if self.venda_extractor:
+                excel_file = self.venda_extractor.extract_vendas(start_date, end_date, month_str)
+                if excel_file:
+                    logger.info(f"Vendas extraídas e salvas em: {excel_file}")
+                    return [excel_file]
+                else:
+                    logger.warning("Nenhuma venda extraída")
+                    return []
+            else:
+                logger.error("VendaExtractor não foi inicializado")
+                return []
+            
+        except Exception as e:
+            logger.error(f"Erro ao extrair dados de vendas: {e}")
             return []
     
     def navigate_to_appointments(self) -> bool:

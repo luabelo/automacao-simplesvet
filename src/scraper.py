@@ -112,18 +112,30 @@ class SimplesVetScraper:
                         )
                         
                         if appointments:
-                            print(f"✅ {len(appointments)} atendimentos extraídos para {month_str}!")
-                            logger.info(f"Dados extraídos para {month_str}: {len(appointments)} registros")
+                            # Calcula o total de agendamentos extraídos
+                            total_appointments = sum(item.get('appointments_count', 0) for item in appointments)
+                            print(f"✅ {total_appointments} agendamentos extraídos para {month_str}!")
+                            logger.info(f"Dados extraídos para {month_str}: {total_appointments} agendamentos em {len(appointments)} arquivo(s)")
                         else:
                             print(f"⚠️  Nenhum atendimento encontrado para {month_str}")
-                            
+                        
+                        # Extrai dados de vendas para o mês
+                        print(f"\n💰 Processando vendas de {month_str}...")
+                        vendas = self.simplesvet.get_vendas_data(
+                            start_date, end_date, month_str
+                        )
+                        
+                        if vendas:
+                            print(f"✅ Vendas extraídas e salvas em: {vendas[0]}")
+                            logger.info(f"Vendas extraídas para {month_str}: {vendas[0]}")
+                        else:
+                            print(f"⚠️  Nenhuma venda encontrada para {month_str}")
+                    
                     except Exception as e:
                         logger.error(f"Erro ao processar mês {month_str}: {e}")
                         print(f"❌ Erro ao processar mês {month_str}: {e}")
                 
-                # Realiza logout
-                print("🚪 Realizando logout...")
-                self.simplesvet.logout()
+                # Não realiza logout, apenas fecha o navegador no final
                 
             finally:
                 # Fecha o navegador

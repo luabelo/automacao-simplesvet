@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional
 import os
 import time
+import requests
 from datetime import datetime
 from .config import Config
 from .webdriver_manager import WebDriverManager
@@ -37,30 +38,29 @@ class AppointmentExtractor:
         # Converte PDF para Excel e extrai dados estruturados
         excel_file = self.pdf_converter.convert_pdf_to_excel(pdf_file, month_str)
         
-        appointments = []
+        # Lê a quantidade de agendamentos do Excel gerado
+        appointments_count = 0
+        if excel_file and os.path.exists(excel_file):
+            try:
+                import pandas as pd
+                df = pd.read_excel(excel_file)
+                appointments_count = len(df)
+                logger.info(f"✅ Excel criado com sucesso: {excel_file}")
+                logger.info(f"Total de {appointments_count} agendamentos extraídos")
+            except Exception as e:
+                logger.warning(f"Erro ao ler Excel para contar agendamentos: {e}")
         
-        if excel_file:
-            logger.info(f"✅ Excel criado com sucesso: {excel_file}")
-            appointments.append({
-                "pdf_file": pdf_file,
-                "excel_file": excel_file,
-                "download_time": time.time(),
-                "date_range": f"{start_date} to {end_date}",
-                "formatted_date_range": f"{formatted_start}-{formatted_end}",
-                "month": month_str,
-                "status": "converted_to_excel"
-            })
-        else:
-            logger.warning("Falha na conversão para Excel, retornando apenas PDF")
-            appointments.append({
-                "pdf_file": pdf_file,
-                "excel_file": None,
-                "download_time": time.time(),
-                "date_range": f"{start_date} to {end_date}",
-                "formatted_date_range": f"{formatted_start}-{formatted_end}",
-                "month": month_str,
-                "status": "pdf_only"
-            })
+        # Retorna lista com metadados incluindo a contagem real
+        appointments = [{
+            "pdf_file": pdf_file,
+            "excel_file": excel_file,
+            "appointments_count": appointments_count,
+            "download_time": time.time(),
+            "date_range": f"{start_date} to {end_date}",
+            "formatted_date_range": f"{formatted_start}-{formatted_end}",
+            "month": month_str,
+            "status": "converted_to_excel" if excel_file else "pdf_only"
+        }]
         
         return appointments
     
@@ -101,89 +101,41 @@ class AppointmentExtractor:
             else:
                 base_filename = f"agendamentos_{start_date.replace('/', '_')}_{end_date.replace('/', '_')}"
             
-            # Método 1: Tenta forçar download via JavaScript
-            try:
-                logger.info("Tentando forçar download via JavaScript...")
-                js_download = f"""
-                var link = document.createElement('a');
-                link.href = '{report_url}';
-                link.download = '{base_filename}.pdf';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                """
-                driver.execute_script(js_download)
-                
-                # Aguarda um pouco para o download iniciar
-                time.sleep(3)
-                
-                # Verifica se o download começou
-                pdf_file = self._wait_for_pdf_download(download_dir, timeout=15, expected_name=base_filename)
-                if pdf_file:
-                    logger.info(f"✅ PDF baixado via JavaScript: {pdf_file}")
-                    return pdf_file
-                
-            except Exception as e:
-                logger.warning(f"Método JavaScript falhou: {str(e)}")
+            # Download direto via requests (mais rápido e confiável)
+            logger.info("Fazendo download direto via requests...")
             
-            # Método 2: Navega para URL (navegador pode fazer download automático)
-            logger.info("Tentando navegação direta (download automático do navegador)...")
-            if not self.webdriver_manager.navigate_to(report_url):
-                logger.error("Erro ao navegar para URL do relatório")
+            # Obter cookies da sessão do Selenium
+            cookies = driver.get_cookies()
+            session = requests.Session()
+            
+            for cookie in cookies:
+                session.cookies.set(cookie['name'], cookie['value'])
+            
+            # Headers similares ao navegador
+            headers = {
+                'User-Agent': driver.execute_script("return navigator.userAgent;"),
+                'Referer': 'https://app.simples.vet/'
+            }
+            
+            response = session.get(report_url, headers=headers, stream=True)
+            
+            if response.status_code == 200:
+                filename = f"{base_filename}.pdf"
+                file_path = os.path.join(download_dir, filename)
+                
+                with open(file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                logger.info(f"✅ PDF baixado via requests: {file_path}")
+                
+                # Remove arquivos doc.pdf duplicados que podem ter sido baixados automaticamente
+                self._cleanup_duplicate_pdfs(download_dir, base_filename)
+                
+                return file_path
+            else:
+                logger.error(f"Erro no download via requests: Status {response.status_code}")
                 return None
-            
-            # Aguarda o download automático
-            logger.info("Aguardando download automático do navegador...")
-            time.sleep(5)
-            
-            # Verifica se algum PDF foi baixado (incluindo doc.pdf)
-            pdf_file = self._wait_for_pdf_download(download_dir, timeout=15, expected_name=base_filename)
-            if pdf_file:
-                logger.info(f"✅ PDF baixado via navegação direta: {pdf_file}")
-                return pdf_file
-            
-            # Método 3: Usa requests para baixar diretamente
-            logger.info("Tentando download direto via requests...")
-            try:
-                import requests
-                
-                # Obter cookies da sessão do Selenium
-                cookies = driver.get_cookies()
-                session = requests.Session()
-                
-                for cookie in cookies:
-                    session.cookies.set(cookie['name'], cookie['value'])
-                
-                # Headers similares ao navegador
-                headers = {
-                    'User-Agent': driver.execute_script("return navigator.userAgent;"),
-                    'Referer': 'https://app.simples.vet/'
-                }
-                
-                response = session.get(report_url, headers=headers, stream=True)
-                
-                if response.status_code == 200:
-                    filename = f"{base_filename}.pdf"
-                    file_path = os.path.join(download_dir, filename)
-                    
-                    with open(file_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    
-                    logger.info(f"✅ PDF baixado via requests: {file_path}")
-                    
-                    # Remove arquivos doc.pdf duplicados que podem ter sido baixados automaticamente
-                    self._cleanup_duplicate_pdfs(download_dir, base_filename)
-                    
-                    return file_path
-                else:
-                    logger.error(f"Erro no download via requests: {response.status_code}")
-                    
-            except Exception as e:
-                logger.error(f"Método requests falhou: {str(e)}")
-            
-            logger.error("Todos os métodos de download falharam")
-            return None
             
         except Exception as e:
             logger.error(f"Erro ao fazer download do PDF: {str(e)}")
