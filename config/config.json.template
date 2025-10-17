@@ -14,7 +14,7 @@
   },
   "browser": {
     "type": "chrome",
-    "headless": false,
+    "headless": true,
     "wait_timeout": 10
   },
   "logging": {

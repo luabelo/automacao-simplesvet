@@ -144,8 +144,8 @@ class AppointmentExtractor:
     def _setup_download_directory(self) -> Optional[str]:
         """Configura e cria diretório para downloads"""
         try:
-            # Cria diretório 'downloads' no projeto se não existir
-            project_root = os.path.dirname(os.path.dirname(__file__))
+            # Cria diretório 'downloads' no projeto se não existir (agora em scrapper, precisa subir 3 níveis)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             download_dir = os.path.join(project_root, "downloads")
             
             if not os.path.exists(download_dir):

@@ -124,8 +124,8 @@ class VendaExtractor:
             logger.error(f"Não foi possível exportar para CSV: {e}")
             return None
 
-        # Aguarda download do CSV
-        download_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "downloads")
+        # Aguarda download do CSV (agora em scrapper, precisa subir 3 níveis para raiz)
+        download_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "downloads")
         csv_file = self._wait_for_csv_download(download_dir, timeout=30)
         if not csv_file:
             logger.error("CSV de vendas não encontrado")

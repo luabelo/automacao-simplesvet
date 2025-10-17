@@ -44,8 +44,8 @@ class Logger:
             formatter: Formatter para os logs
         """
         try:
-            # Diretório de logs
-            log_dir = Path(__file__).parent.parent / 'logs'
+            # Diretório de logs (agora em scrapper, precisa subir 2 níveis)
+            log_dir = Path(__file__).parent.parent.parent / 'logs'
             log_dir.mkdir(exist_ok=True)
             
             # Nome do arquivo com timestamp

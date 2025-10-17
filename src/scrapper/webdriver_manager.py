@@ -86,8 +86,8 @@ class WebDriverManager:
     def _get_download_directory(self) -> Optional[str]:
         """Obtém o diretório de download do projeto"""
         try:
-            # Cria diretório 'downloads' no projeto se não existir
-            current_dir = os.path.dirname(os.path.dirname(__file__))
+            # Cria diretório 'downloads' no projeto se não existir (agora em scrapper, precisa subir 3 níveis)
+            current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
             download_dir = os.path.join(current_dir, "downloads")
             
             if not os.path.exists(download_dir):

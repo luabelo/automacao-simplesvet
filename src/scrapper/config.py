@@ -15,8 +15,9 @@ class Config:
             config_file: Caminho para o arquivo de configuração
         """
         if config_file is None:
+            # Agora está em src/scrapper/, então parent.parent.parent vai para a raiz
             config_file = os.path.join(
-                Path(__file__).parent.parent, 'config', 'config.json'
+                Path(__file__).parent.parent.parent, 'config', 'config.json'
             )
         
         self.config_file = config_file

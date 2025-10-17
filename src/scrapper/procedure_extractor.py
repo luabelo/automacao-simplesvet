@@ -212,8 +212,8 @@ class ProcedureExtractor:
             logger.error(f"Não foi possível clicar no botão de relatório: {e}")
             return None
 
-        # 6. Remove arquivos "atendimentos" antigos antes de baixar novos
-        download_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "downloads")
+        # 6. Remove arquivos "atendimentos" antigos antes de baixar novos (agora em scrapper, precisa subir 3 níveis)
+        download_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "downloads")
         self._cleanup_old_atendimentos_files(download_dir)
         
         # 7. Clica em exportar para Excel
@@ -223,7 +223,6 @@ class ProcedureExtractor:
             )
             export_btn.click()
             logger.info(f"Exportando {event_name} para Excel...")
-            time.sleep(5)
         except Exception as e:
             logger.error(f"Não foi possível exportar para Excel: {e}")
             return None
