@@ -1,10 +1,15 @@
 import os
 import time
 import pandas as pd
+import warnings
 from datetime import datetime
 from .logger import logger
 from .config import Config
 from .webdriver_manager import WebDriverManager
+
+# Suprime warnings do pandas
+warnings.filterwarnings('ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings('ignore', message='.*SettingWithCopyWarning.*')
 
 class VendaExtractor:
     """Extrator de vendas do SimplesVet"""
@@ -152,15 +157,16 @@ class VendaExtractor:
         try:
             df = pd.read_csv(csv_path, sep=';', encoding='utf-8')
         except UnicodeDecodeError:
-            logger.warning("CSV não está em UTF-8, tentando latin1...")
+            logger.debug("CSV não está em UTF-8, usando latin1...")
             df = pd.read_csv(csv_path, sep=';', encoding='latin1')
         # Colunas desejadas
         columns = [
             'Data e hora', 'Venda', 'Status da venda', 'Funcionário', 'Cliente', 'Animal',
             'Tipo do Item', 'Grupo', 'Produto/serviço', 'Valor Unitário', 'Quantidade', 'Bruto', 'Desconto', 'Líquido'
         ]
-        # Filtra
-        df_filtered = df[[col for col in columns if col in df.columns]]
+        # Filtra e cria uma cópia explícita para evitar SettingWithCopyWarning
+        df_filtered = df[[col for col in columns if col in df.columns]].copy()
+        
         # Converte colunas financeiras e quantidade para número
         num_cols = ['Valor Unitário', 'Quantidade', 'Bruto', 'Desconto', 'Líquido']
         for col in num_cols:

@@ -112,8 +112,10 @@ class SimplesVetScraper:
                         )
                         
                         if appointments:
-                            print(f"✅ {len(appointments)} atendimentos extraídos para {month_str}!")
-                            logger.info(f"Dados extraídos para {month_str}: {len(appointments)} registros")
+                            # Calcula o total de agendamentos extraídos
+                            total_appointments = sum(item.get('appointments_count', 0) for item in appointments)
+                            print(f"✅ {total_appointments} agendamentos extraídos para {month_str}!")
+                            logger.info(f"Dados extraídos para {month_str}: {total_appointments} agendamentos em {len(appointments)} arquivo(s)")
                         else:
                             print(f"⚠️  Nenhum atendimento encontrado para {month_str}")
                         

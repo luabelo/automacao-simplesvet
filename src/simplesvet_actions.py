@@ -90,7 +90,7 @@ class SimplesVetActions:
             if not self.webdriver_manager.navigate_to(login_url):
                 return False
             
-            time.sleep(3)
+            time.sleep(1)
             
             # Obtém credenciais
             email = self.config.get_credential('simplesvet', 'email')
@@ -150,7 +150,7 @@ class SimplesVetActions:
             login_button.click()
             logger.info("Botão de login clicado")
             
-            time.sleep(5)
+            time.sleep(1)
             
             if self._verify_login():
                 logger.info("Login realizado com sucesso!")
@@ -233,7 +233,9 @@ class SimplesVetActions:
                 logger.error("AppointmentExtractor não foi inicializado")
                 appointments = []
             
-            logger.info(f"Encontrados {len(appointments)} atendimentos")
+            # Calcula o total de agendamentos extraídos
+            total_appointments = sum(item.get('appointments_count', 0) for item in appointments)
+            logger.info(f"Encontrados {total_appointments} agendamentos em {len(appointments)} arquivo(s)")
             return appointments
             
         except Exception as e:

@@ -38,30 +38,29 @@ class AppointmentExtractor:
         # Converte PDF para Excel e extrai dados estruturados
         excel_file = self.pdf_converter.convert_pdf_to_excel(pdf_file, month_str)
         
-        appointments = []
+        # Lê a quantidade de agendamentos do Excel gerado
+        appointments_count = 0
+        if excel_file and os.path.exists(excel_file):
+            try:
+                import pandas as pd
+                df = pd.read_excel(excel_file)
+                appointments_count = len(df)
+                logger.info(f"✅ Excel criado com sucesso: {excel_file}")
+                logger.info(f"Total de {appointments_count} agendamentos extraídos")
+            except Exception as e:
+                logger.warning(f"Erro ao ler Excel para contar agendamentos: {e}")
         
-        if excel_file:
-            logger.info(f"✅ Excel criado com sucesso: {excel_file}")
-            appointments.append({
-                "pdf_file": pdf_file,
-                "excel_file": excel_file,
-                "download_time": time.time(),
-                "date_range": f"{start_date} to {end_date}",
-                "formatted_date_range": f"{formatted_start}-{formatted_end}",
-                "month": month_str,
-                "status": "converted_to_excel"
-            })
-        else:
-            logger.warning("Falha na conversão para Excel, retornando apenas PDF")
-            appointments.append({
-                "pdf_file": pdf_file,
-                "excel_file": None,
-                "download_time": time.time(),
-                "date_range": f"{start_date} to {end_date}",
-                "formatted_date_range": f"{formatted_start}-{formatted_end}",
-                "month": month_str,
-                "status": "pdf_only"
-            })
+        # Retorna lista com metadados incluindo a contagem real
+        appointments = [{
+            "pdf_file": pdf_file,
+            "excel_file": excel_file,
+            "appointments_count": appointments_count,
+            "download_time": time.time(),
+            "date_range": f"{start_date} to {end_date}",
+            "formatted_date_range": f"{formatted_start}-{formatted_end}",
+            "month": month_str,
+            "status": "converted_to_excel" if excel_file else "pdf_only"
+        }]
         
         return appointments
     
