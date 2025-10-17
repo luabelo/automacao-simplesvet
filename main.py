@@ -10,7 +10,7 @@ Antes de executar:
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-from src.scraper import SimplesVetScraper
+from src.scrapper.scraper import SimplesVetScraper
 
 if __name__ == "__main__":
     scraper = SimplesVetScraper()
