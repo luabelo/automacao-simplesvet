@@ -130,6 +130,25 @@ class SimplesVetScraper:
                             logger.info(f"Vendas extraídas para {month_str}: {vendas[0]}")
                         else:
                             print(f"⚠️  Nenhuma venda encontrada para {month_str}")
+                        
+                        # Extrai dados de procedimentos (vacinas e exames) para o mês
+                        print(f"\n💉 Processando procedimentos de {month_str}...")
+                        procedures = self.simplesvet.get_procedures_data(
+                            start_date, end_date, month_str
+                        )
+                        
+                        if procedures:
+                            if procedures.get('vacinas'):
+                                print(f"✅ Vacinas extraídas: {procedures['vacinas']}")
+                            else:
+                                print(f"⚠️  Nenhuma vacina encontrada para {month_str}")
+                            
+                            if procedures.get('exames'):
+                                print(f"✅ Exames extraídos: {procedures['exames']}")
+                            else:
+                                print(f"⚠️  Nenhum exame encontrado para {month_str}")
+                        else:
+                            print(f"⚠️  Nenhum procedimento encontrado para {month_str}")
                     
                     except Exception as e:
                         logger.error(f"Erro ao processar mês {month_str}: {e}")

@@ -4,6 +4,7 @@ from .config import Config
 from .webdriver_manager import WebDriverManager
 from .appointment_extractor import AppointmentExtractor
 from .venda_extractor import VendaExtractor
+from .procedure_extractor import ProcedureExtractor
 from .logger import logger
 
 
@@ -19,6 +20,7 @@ class SimplesVetActions:
         self.webdriver_manager: Optional[WebDriverManager] = None
         self.appointment_extractor: Optional[AppointmentExtractor] = None
         self.venda_extractor: Optional[VendaExtractor] = None
+        self.procedure_extractor: Optional[ProcedureExtractor] = None
         self.is_logged_in = False
         
         # Inicializa o WebDriver com configurações do config.json
@@ -33,6 +35,8 @@ class SimplesVetActions:
         self.appointment_extractor = AppointmentExtractor(self.webdriver_manager, self.config)
         # Inicializa VendaExtractor
         self.venda_extractor = VendaExtractor(self.webdriver_manager, self.config)
+        # Inicializa ProcedureExtractor
+        self.procedure_extractor = ProcedureExtractor(self.webdriver_manager, self.config)
     
     def start_browser(self) -> bool:
         """
@@ -276,6 +280,44 @@ class SimplesVetActions:
         except Exception as e:
             logger.error(f"Erro ao extrair dados de vendas: {e}")
             return []
+    
+    def get_procedures_data(self, start_date: str = None, end_date: str = None, month_str: str = None) -> dict:
+        """
+        Extrai dados de procedimentos (vacinas e exames) do SimplesVet
+        
+        Args:
+            start_date: Data de início (formato YYYY-MM-DD)
+            end_date: Data de fim (formato YYYY-MM-DD)
+            month_str: Mês no formato YYYYMM (usado para nome do arquivo)
+            
+        Returns:
+            Dicionário com caminhos dos arquivos Excel gerados {'vacinas': path, 'exames': path}
+        """
+        try:
+            if not self.is_logged_in:
+                logger.error("Usuário não está logado")
+                return {'vacinas': None, 'exames': None}
+            
+            logger.info(f"Buscando procedimentos de {start_date} até {end_date}")
+            
+            if self.procedure_extractor:
+                results = self.procedure_extractor.extract_procedures(start_date, end_date, month_str)
+                if results:
+                    if results.get('vacinas'):
+                        logger.info(f"Vacinas extraídas: {results['vacinas']}")
+                    if results.get('exames'):
+                        logger.info(f"Exames extraídos: {results['exames']}")
+                    return results
+                else:
+                    logger.warning("Nenhum procedimento extraído")
+                    return {'vacinas': None, 'exames': None}
+            else:
+                logger.error("ProcedureExtractor não foi inicializado")
+                return {'vacinas': None, 'exames': None}
+            
+        except Exception as e:
+            logger.error(f"Erro ao extrair dados de procedimentos: {e}")
+            return {'vacinas': None, 'exames': None}
     
     def navigate_to_appointments(self) -> bool:
         """
