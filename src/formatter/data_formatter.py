@@ -155,37 +155,37 @@ class CatlandFormatter:
         ("Vacinas V5", "indent"),
         ("Valor arrecadado com as vacinas e testes pagos", None),
         ("Castrações ONG", None),
-        ("Fêmea / Adulto", "indent"),
+        ("Fêmea / Adulta", "indent"),
         ("Fêmea / Filhote", "indent"),
-        ("Macho/ Adulto", "indent"),
-        ("Macho/ Filhote", "indent"),
+        ("Macho / Adulto", "indent"),
+        ("Macho / Filhote", "indent"),
         ("Castrações Lar Temporário", None),
-        ("Fêmea / Adulto", "indent"),
+        ("Fêmea / Adulta", "indent"),
         ("Fêmea / Filhote", "indent"),
-        ("Macho/ Adulto", "indent"),
-        ("Macho/ Filhote", "indent"),
+        ("Macho / Adulto", "indent"),
+        ("Macho / Filhote", "indent"),
         ("Castrações Solidárias*", None),
         ("Castrações - Solidária", "indent"),
-        ("Fêmea / Adulto", "indent2"),
+        ("Fêmea / Adulta", "indent2"),
         ("Fêmea / Filhote", "indent2"),
-        ("Macho/ Adulto", "indent2"),
-        ("Macho/ Filhote", "indent2"),
+        ("Macho / Adulto", "indent2"),
+        ("Macho / Filhote", "indent2"),
         ("Castrações - Preço de Custo", "indent"),
-        ("Fêmea / Adulto", "indent2"),
+        ("Fêmea / Adulta", "indent2"),
         ("Fêmea / Filhote", "indent2"),
-        ("Macho/ Adulto", "indent2"),
-        ("Macho/ Filhote", "indent2"),
+        ("Macho / Adulto", "indent2"),
+        ("Macho / Filhote", "indent2"),
         ("Castrações Externas Pagas", None),
         ("Castrações Paga Gato Externo", "indent"),
-        ("Fêmea / Adulto", "indent2"),
+        ("Fêmea / Adulta", "indent2"),
         ("Fêmea / Filhote", "indent2"),
-        ("Macho/ Adulto", "indent2"),
-        ("Macho/ Filhote", "indent2"),
+        ("Macho / Adulto", "indent2"),
+        ("Macho / Filhote", "indent2"),
         ("Castrações LT Resgatante", "indent"),
-        ("Fêmea / Adulto", "indent2"),
+        ("Fêmea / Adulta", "indent2"),
         ("Fêmea / Filhote", "indent2"),
-        ("Macho/ Adulto", "indent2"),
-        ("Macho/ Filhote", "indent2"),
+        ("Macho / Adulto", "indent2"),
+        ("Macho / Filhote", "indent2"),
         ("Total de Castrações", None),
         ("Castrações agendadas", "indent"),
         ("Castrações realizadas/atendimentos", "indent"),
@@ -360,29 +360,36 @@ class CatlandFormatter:
             row = 2
             current_parent = None  # Rastreia o contexto do item pai atual
             
+            # Lista de títulos gerais que não são contextos de castração
+            general_titles = [
+                "Vacinas e Testes Internos", "Vacinas e Testes Externos", 
+                "Valor arrecadado com as vacinas e testes pagos",
+                "Castrações Solidárias*", "Castrações Externas Pagas",
+                "Total de Castrações", "Custo total das castrações realizadas",
+                "Castrações - preço de custo - valor unitário",
+                "Castrações externas pagas - valor unitário",
+                "Valor arrecadado com as castrações"
+            ]
+            
+            # Lista de todos os tipos de castração (pais de categorias)
+            castration_types = [config['report_label'] for config in self.CASTRATION_TYPES.values()]
+            castration_types.extend(["Castrações - Solidária", "Castrações - Preço de Custo",
+                                    "Castrações Paga Gato Externo", "Castrações LT Resgatante"])
+            
             for item_name, indent_type in self.REPORT_STRUCTURE:
                 ws[f'A{row}'] = item_name
                 
-                # Atualiza o contexto pai ANTES de processar a indentação
-                if indent_type is None:
-                    # Item sem indentação pode ser um contexto pai
-                    # Verifica se é um tipo de castração (não é um título geral)
-                    if item_name not in ["Vacinas e Testes Internos", "Vacinas e Testes Externos", 
-                                         "Valor arrecadado com as vacinas e testes pagos",
-                                         "Castrações Solidárias*", "Castrações Externas Pagas",
-                                         "Total de Castrações", "Custo total das castrações realizadas",
-                                         "Castrações - preço de custo - valor unitário",
-                                         "Castrações externas pagas - valor unitário",
-                                         "Valor arrecadado com as castrações"]:
-                        current_parent = item_name
-                elif indent_type == "indent":
-                    # Se tem indent, pode ser um sub-contexto pai (como "Castrações - Solidária")
-                    # Verifica se é um tipo de castração que tem filhos
-                    if " - " in item_name or "Paga" in item_name:
-                        current_parent = item_name
+                # Atualiza o contexto pai se for um tipo de castração
+                if item_name in castration_types:
+                    current_parent = item_name
+                elif indent_type is None and item_name not in general_titles:
+                    # Item sem indentação que não é título geral pode ser contexto pai
+                    current_parent = item_name
+                
+                # Aplica indentação
+                if indent_type == "indent":
                     ws[f'A{row}'].alignment = Alignment(indent=2)
                 elif indent_type == "indent2":
-                    # indent2 sempre usa o contexto pai atual
                     ws[f'A{row}'].alignment = Alignment(indent=4)
                 
                 # Preenche valores das castrações
