@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from ..scrapper.logger import logger
+from .vaccine_test_processor import VaccineTestProcessor
 
 
 class CastrationValidator:
@@ -205,6 +206,7 @@ class CatlandFormatter:
         self.appointments_df = None
         self.sales_df = None
         self.validator = None
+        self.vaccine_test_processor = None
         self.data = {}
         
         logger.info(f"Inicializando formatador para o período {year_month}")
@@ -319,6 +321,26 @@ class CatlandFormatter:
         
         logger.info("Processamento de castrações concluído")
     
+    def process_vaccines_and_tests(self):
+        """Processa os dados de vacinas e testes."""
+        logger.info("Processando dados de vacinas e testes...")
+        
+        # Inicializa e executa o processador de vacinas e testes
+        self.vaccine_test_processor = VaccineTestProcessor(
+            self.year_month,
+            self.downloads_folder
+        )
+        
+        if not self.vaccine_test_processor.run():
+            logger.warning("Falha ao processar vacinas e testes")
+            return
+        
+        # Integra os dados processados
+        vaccine_test_data = self.vaccine_test_processor.get_data()
+        self.data.update(vaccine_test_data)
+        
+        logger.info("Integração de dados de vacinas e testes concluída")
+    
     def create_formatted_file(self) -> bool:
         """
         Cria o arquivo formatado em XLSX.
@@ -356,15 +378,19 @@ class CatlandFormatter:
             row = 2
             current_parent = None  # Rastreia o contexto do item pai atual
             
-            # Lista de títulos gerais que não são contextos de castração
-            general_titles = [
-                "Vacinas e Testes Internos", "Vacinas e Testes Externos", 
+            # Lista de títulos gerais que não têm valores (apenas cabeçalhos)
+            header_only_titles = [
                 "Valor arrecadado com as vacinas e testes pagos",
                 "Castrações Solidárias*", "Castrações Externas Pagas",
                 "Total de Castrações", "Custo total das castrações realizadas",
                 "Castrações - preço de custo - valor unitário",
                 "Castrações externas pagas - valor unitário",
                 "Valor arrecadado com as castrações"
+            ]
+            
+            # Lista de contextos que devem ser definidos como parent
+            parent_contexts = [
+                "Vacinas e Testes Internos", "Vacinas e Testes Externos"
             ]
             
             # Lista de todos os tipos de castração (pais de categorias)
@@ -375,11 +401,15 @@ class CatlandFormatter:
             for item_name, indent_type in self.REPORT_STRUCTURE:
                 ws[f'A{row}'] = item_name
                 
-                # Atualiza o contexto pai se for um tipo de castração
-                if item_name in castration_types:
+                # Atualiza o contexto pai
+                if item_name in parent_contexts:
+                    # Títulos de seção de vacinas/testes
                     current_parent = item_name
-                elif indent_type is None and item_name not in general_titles:
-                    # Item sem indentação que não é título geral pode ser contexto pai
+                elif item_name in castration_types:
+                    # Tipos de castração
+                    current_parent = item_name
+                elif indent_type is None and item_name not in header_only_titles:
+                    # Outros itens sem indentação que podem ser contexto pai
                     current_parent = item_name
                 
                 # Aplica indentação
@@ -420,6 +450,36 @@ class CatlandFormatter:
         Returns:
             Valor numérico ou None se não houver valor
         """
+        # ===== VACINAS E TESTES =====
+        
+        # Testes e Vacinas Internos
+        if parent_context == "Vacinas e Testes Internos":
+            vaccine_test_map = {
+                "Teste FIV / FeLV": "test_fiv_felv_internal",
+                "FeLV - V1": "vaccine_felv_v1_internal",
+                "Vacinas Raiva": "vaccine_raiva_internal",
+                "Vacinas V3": "vaccine_v3_internal",
+                "Vacinas V4": "vaccine_v4_internal",
+                "Vacinas V5": "vaccine_v5_internal"
+            }
+            if item_name in vaccine_test_map:
+                return self.data.get(vaccine_test_map[item_name], 0)
+        
+        # Testes e Vacinas Externos
+        if parent_context == "Vacinas e Testes Externos":
+            vaccine_test_map = {
+                "Teste FIV / FeLV": "test_fiv_felv_external",
+                "FeLV - V1": "vaccine_felv_v1_external",
+                "Vacinas Raiva": "vaccine_raiva_external",
+                "Vacinas V3": "vaccine_v3_external",
+                "Vacinas V4": "vaccine_v4_external",
+                "Vacinas V5": "vaccine_v5_external"
+            }
+            if item_name in vaccine_test_map:
+                return self.data.get(vaccine_test_map[item_name], 0)
+        
+        # ===== CASTRAÇÕES =====
+        
         # Mapeia o label do relatório para o tipo de castração
         report_label_to_key = {
             config['report_label']: key 
@@ -542,6 +602,9 @@ class CatlandFormatter:
         
         # Processa castrações
         self.process_castrations()
+        
+        # Processa vacinas e testes
+        self.process_vaccines_and_tests()
         
         # Cria o arquivo formatado
         if not self.create_formatted_file():
