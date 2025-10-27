@@ -4,9 +4,8 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
-from ..scrapper.logger import setup_logger
+from ..scrapper.logger import logger
 
-logger = setup_logger(__name__)
 
 class CastrationValidator:
     """Classe responsável por validar os dados de castrações."""
@@ -43,8 +42,8 @@ class CastrationValidator:
         # Conta atendimentos concluídos
         total_atendimentos = len(
             self.appointments_df[
-                (self.appointments_df['tipo_atendimento'].str.contains(appointment_type, case=False, na=False)) &
-                (self.appointments_df['status'].str.contains('Atendido', case=False, na=False))
+                (self.appointments_df['tipo_atendimento'].str.contains(appointment_type, case=False, na=False, regex=False)) &
+                (self.appointments_df['status'].str.contains('Atendido', case=False, na=False, regex=False))
             ]
         )
         
@@ -134,8 +133,8 @@ class CatlandFormatter:
     CATEGORIES = {
         'femea_adulto': 'Fêmea / Adulto',
         'femea_filhote': 'Fêmea / Filhote',
-        'macho_adulto': 'Macho / Adulto',
-        'macho_filhote': 'Macho/ Filhote'  
+        'macho_adulto': 'Macho / Adulto', 
+        'macho_filhote': 'Macho / Filhote'  
     }
     
     # Estrutura do relatório
@@ -244,6 +243,10 @@ class CatlandFormatter:
             
             logger.info(f"Carregando arquivo de vendas: {sales_file}")
             self.sales_df = pd.read_excel(sales_file)
+            
+            # Renomeia a coluna "Produto/serviço" para "procedimento" para facilitar o código
+            if 'Produto/serviço' in self.sales_df.columns:
+                self.sales_df.rename(columns={'Produto/serviço': 'procedimento'}, inplace=True)
             
             # Inicializa o validador
             self.validator = CastrationValidator(self.appointments_df, self.sales_df)
@@ -360,14 +363,10 @@ class CatlandFormatter:
             for item_name, indent_type in self.REPORT_STRUCTURE:
                 ws[f'A{row}'] = item_name
                 
-                # Aplica indentação
-                if indent_type == "indent":
-                    ws[f'A{row}'].alignment = Alignment(indent=2)
-                    current_parent = item_name  # Atualiza o contexto pai
-                elif indent_type == "indent2":
-                    ws[f'A{row}'].alignment = Alignment(indent=4)
-                else:
-                    # Se não tem indentação, pode ser um novo contexto pai
+                # Atualiza o contexto pai ANTES de processar a indentação
+                if indent_type is None:
+                    # Item sem indentação pode ser um contexto pai
+                    # Verifica se é um tipo de castração (não é um título geral)
                     if item_name not in ["Vacinas e Testes Internos", "Vacinas e Testes Externos", 
                                          "Valor arrecadado com as vacinas e testes pagos",
                                          "Castrações Solidárias*", "Castrações Externas Pagas",
@@ -376,6 +375,15 @@ class CatlandFormatter:
                                          "Castrações externas pagas - valor unitário",
                                          "Valor arrecadado com as castrações"]:
                         current_parent = item_name
+                elif indent_type == "indent":
+                    # Se tem indent, pode ser um sub-contexto pai (como "Castrações - Solidária")
+                    # Verifica se é um tipo de castração que tem filhos
+                    if " - " in item_name or "Paga" in item_name:
+                        current_parent = item_name
+                    ws[f'A{row}'].alignment = Alignment(indent=2)
+                elif indent_type == "indent2":
+                    # indent2 sempre usa o contexto pai atual
+                    ws[f'A{row}'].alignment = Alignment(indent=4)
                 
                 # Preenche valores das castrações
                 value = self._get_value_for_item(item_name, current_parent)
