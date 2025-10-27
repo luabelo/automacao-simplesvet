@@ -131,7 +131,7 @@ class CatlandFormatter:
     
     # Categorias padrão para todas as castrações
     CATEGORIES = {
-        'femea_adulto': 'Fêmea / Adulto',
+        'femea_adulto': 'Fêmea / Adulta',
         'femea_filhote': 'Fêmea / Filhote',
         'macho_adulto': 'Macho / Adulto', 
         'macho_filhote': 'Macho / Filhote'  
