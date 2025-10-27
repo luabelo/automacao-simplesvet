@@ -189,11 +189,7 @@ class CatlandFormatter:
         ("Total de Castrações", None),
         ("Castrações agendadas", "indent"),
         ("Castrações realizadas/atendimentos", "indent"),
-        ("Castrações canceladas", "indent"),
-        ("Custo total das castrações realizadas", None),
-        ("Castrações - preço de custo - valor unitário", None),
-        ("Castrações externas pagas - valor unitário", None),
-        ("Valor arrecadado com as castrações", None),
+        ("Castrações canceladas", "indent")
     ]
     
     def __init__(self, year_month: str, downloads_folder: str = "downloads"):
@@ -424,21 +420,93 @@ class CatlandFormatter:
         Returns:
             Valor numérico ou None se não houver valor
         """
-        # Se não tem contexto pai, não há valor para retornar
-        if not parent_context:
-            return None
-        
-        # Mapeia o contexto pai para o tipo de castração
+        # Mapeia o label do relatório para o tipo de castração
         report_label_to_key = {
             config['report_label']: key 
             for key, config in self.CASTRATION_TYPES.items()
         }
         
-        # Verifica se o contexto pai é um tipo de castração conhecido
-        if parent_context not in report_label_to_key:
+        # Se o item é um título de castração, retorna o total
+        if item_name in report_label_to_key:
+            castration_key = report_label_to_key[item_name]
+            total = 0
+            for category_key in self.CATEGORIES.keys():
+                data_key = f"{castration_key}_{category_key}"
+                total += self.data.get(data_key, 0)
+            return total if total > 0 else 0
+        
+        # Verifica se é um subtipo de castração (Solidária, Preço de Custo, etc)
+        subtypes = {
+            "Castrações - Solidária": "solidaria",
+            "Castrações - Preço de Custo": "preco_custo",
+            "Castrações Paga Gato Externo": "gato_externo",
+            "Castrações LT Resgatante": "lt_resgatante"
+        }
+        
+        if item_name in subtypes:
+            castration_key = subtypes[item_name]
+            total = 0
+            for category_key in self.CATEGORIES.keys():
+                data_key = f"{castration_key}_{category_key}"
+                total += self.data.get(data_key, 0)
+            return total if total > 0 else 0
+        
+        # Verifica se é um título agrupador que soma seus filhos
+        if item_name == "Castrações Solidárias*":
+            # Soma: Solidária + Preço de Custo
+            total = 0
+            for castration_key in ["solidaria", "preco_custo"]:
+                for category_key in self.CATEGORIES.keys():
+                    data_key = f"{castration_key}_{category_key}"
+                    total += self.data.get(data_key, 0)
+            return total if total > 0 else 0
+        
+        if item_name == "Castrações Externas Pagas":
+            # Soma: Gato Externo + LT Resgatante
+            total = 0
+            for castration_key in ["gato_externo", "lt_resgatante"]:
+                for category_key in self.CATEGORIES.keys():
+                    data_key = f"{castration_key}_{category_key}"
+                    total += self.data.get(data_key, 0)
+            return total if total > 0 else 0
+        
+        # Verifica se é "Castrações agendadas" - conta todos os agendamentos de castração
+        if item_name == "Castrações agendadas":
+            # Filtra apenas os agendamentos que são de castração (contém "Castração" no tipo)
+            castracoes = self.appointments_df[
+                self.appointments_df['tipo_atendimento'].str.contains('Castração', case=False, na=False, regex=False)
+            ]
+            return len(castracoes)
+        
+        # Verifica se é "Castrações realizadas/atendimentos" - conta só os atendidos
+        if item_name == "Castrações realizadas/atendimentos":
+            castracoes = self.appointments_df[
+                (self.appointments_df['tipo_atendimento'].str.contains('Castração', case=False, na=False, regex=False)) &
+                (self.appointments_df['status'].str.contains('Atendido', case=False, na=False, regex=False))
+            ]
+            return len(castracoes)
+        
+        # Verifica se é "Castrações canceladas" - conta só os cancelados
+        if item_name == "Castrações canceladas":
+            castracoes = self.appointments_df[
+                (self.appointments_df['tipo_atendimento'].str.contains('Castração', case=False, na=False, regex=False)) &
+                (self.appointments_df['status'].str.contains('Cancelado', case=False, na=False, regex=False))
+            ]
+            return len(castracoes)
+        
+        # Se não tem contexto pai, não há valor para retornar
+        if not parent_context:
             return None
         
-        castration_key = report_label_to_key[parent_context]
+        # Verifica se o contexto pai é um tipo de castração conhecido
+        if parent_context not in report_label_to_key and parent_context not in subtypes:
+            return None
+        
+        # Obtém a chave do tipo de castração
+        if parent_context in report_label_to_key:
+            castration_key = report_label_to_key[parent_context]
+        else:
+            castration_key = subtypes[parent_context]
         
         # Mapeia o nome do item para a categoria
         category_label_to_key = {
