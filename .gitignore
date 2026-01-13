@@ -15,3 +15,5 @@ config/config.json
 downloads/
 *.tmp
 *.temp
+
+.wdm/
