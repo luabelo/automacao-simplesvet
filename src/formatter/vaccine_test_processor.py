@@ -33,16 +33,18 @@ class VaccineTestProcessor:
     # Clientes internos (Catland/Petz)
     INTERNAL_CLIENTS = ['Catland', 'Petz']
     
-    def __init__(self, year_month: str, downloads_folder: str = "downloads"):
+    def __init__(self, year_month: str, sales_df: pd.DataFrame = None, downloads_folder: str = "downloads"):
         """
         Inicializa o processador de vacinas e testes.
         
         Args:
             year_month: String no formato YYYYMM (ex: 202509)
+            sales_df: DataFrame com os dados de vendas (necessário para verificar se é interno/externo)
             downloads_folder: Pasta onde estão os arquivos XLS
         """
         self.year_month = year_month
         self.downloads_folder = downloads_folder
+        self.sales_df = sales_df
         self.vaccines_df = None
         self.exams_df = None
         self.data = {}
@@ -149,21 +151,44 @@ class VaccineTestProcessor:
         
         return col_str
     
-    def _is_internal_client(self, client_name: str) -> bool:
+    def _is_paid_service(self, animal_name: str) -> bool:
         """
-        Verifica se o cliente é interno (Catland ou Petz).
+        Verifica se o animal tem vendas pagas (valor > 0).
         
         Args:
-            client_name: Nome do cliente
+            animal_name: Nome do animal
         
         Returns:
-            True se for cliente interno, False caso contrário
+            True se tem venda paga (externo), False se não tem ou tem apenas vendas de R$ 0 (interno)
         """
-        if pd.isna(client_name):
+        if pd.isna(animal_name) or self.sales_df is None:
             return False
         
-        client_str = str(client_name).lower()
-        return any(internal.lower() in client_str for internal in self.INTERNAL_CLIENTS)
+        animal_str = str(animal_name).strip()
+        
+        # Busca vendas deste animal no DataFrame de vendas
+        # Normaliza o nome do animal para comparação
+        sales_mask = self.sales_df['Animal'].apply(
+            lambda x: str(x).strip().lower() == animal_str.lower() if pd.notna(x) else False
+        )
+        
+        animal_sales = self.sales_df[sales_mask]
+        
+        if len(animal_sales) == 0:
+            # Se não tem vendas, considera como interno (gratuito)
+            return False
+        
+        # Verifica se existe alguma venda com valor Líquido > 0
+        if 'Líquido' in animal_sales.columns:
+            try:
+                max_value = pd.to_numeric(animal_sales['Líquido'], errors='coerce').max()
+                if pd.notna(max_value) and max_value > 0:
+                    return True  # Tem venda paga = externo
+            except:
+                pass
+        
+        # Se não encontrou coluna de valor ou todos são 0, é interno
+        return False
     
     def _is_authorized_user(self, user_name: str) -> bool:
         """
@@ -191,8 +216,8 @@ class VaccineTestProcessor:
         
         Args:
             vaccine_type: Tipo da vacina (ex: 'FeLV - V1', 'Antirrábica')
-            is_internal: Se True, conta apenas clientes internos (Catland/Petz)
-                        Se False, conta apenas clientes externos
+            is_internal: Se True, conta apenas serviços gratuitos (sem venda paga)
+                        Se False, conta apenas serviços pagos (com venda > 0)
         
         Returns:
             Número de vacinas aplicadas
@@ -206,11 +231,13 @@ class VaccineTestProcessor:
             (self.vaccines_df['Usuario'].isin(self.AUTHORIZED_USERS))
         )
         
-        # Aplica filtro de cliente interno ou externo
+        # Aplica filtro de serviço pago ou gratuito baseado nas vendas
         if is_internal:
-            mask &= self.vaccines_df['Cliente'].apply(self._is_internal_client)
+            # Interno = sem venda paga (gratuito)
+            mask &= ~self.vaccines_df['Animal'].apply(self._is_paid_service)
         else:
-            mask &= ~self.vaccines_df['Cliente'].apply(self._is_internal_client)
+            # Externo = com venda paga
+            mask &= self.vaccines_df['Animal'].apply(self._is_paid_service)
         
         count = mask.sum()
         
@@ -230,8 +257,8 @@ class VaccineTestProcessor:
         
         Args:
             test_type: Tipo do teste (ex: 'Teste FIV/FeLV')
-            is_internal: Se True, conta apenas clientes internos (Catland/Petz)
-                        Se False, conta apenas clientes externos
+            is_internal: Se True, conta apenas serviços gratuitos (sem venda paga)
+                        Se False, conta apenas serviços pagos (com venda > 0)
         
         Returns:
             Número de testes realizados
@@ -245,11 +272,13 @@ class VaccineTestProcessor:
             (self.exams_df['Usuario'].isin(self.AUTHORIZED_USERS))
         )
         
-        # Aplica filtro de cliente interno ou externo
+        # Aplica filtro de serviço pago ou gratuito baseado nas vendas
         if is_internal:
-            mask &= self.exams_df['Cliente'].apply(self._is_internal_client)
+            # Interno = sem venda paga (gratuito)
+            mask &= ~self.exams_df['Animal'].apply(self._is_paid_service)
         else:
-            mask &= ~self.exams_df['Cliente'].apply(self._is_internal_client)
+            # Externo = com venda paga
+            mask &= self.exams_df['Animal'].apply(self._is_paid_service)
         
         count = mask.sum()
         
@@ -258,6 +287,77 @@ class VaccineTestProcessor:
         )
         
         return count
+    
+    def _calculate_revenue(self) -> float:
+        """
+        Calcula o valor total arrecadado com vacinas e testes pagos.
+        
+        Returns:
+            Valor total arrecadado em R$
+        """
+        if self.sales_df is None:
+            logger.warning("DataFrame de vendas não disponível para calcular receita")
+            return 0.0
+        
+        total_revenue = 0.0
+        
+        # Padrões para identificar vacinas e testes nas vendas
+        vaccine_patterns = [
+            'FeLV - V1', 'FeLV', 'Antirrábica', 'Raiva',
+            'Triplice - V3', 'Triplice', 'V3',
+            'Quádrupla - V4', 'Quádrupla', 'V4',
+            'Quíntupla - V5', 'Quíntupla', 'V5',
+            'Vacina'
+        ]
+        
+        test_patterns = [
+            'Teste FIV/FeLV', 'FIV/FeLV', 'FIV', 'FeLV',
+            'Teste'
+        ]
+        
+        all_patterns = vaccine_patterns + test_patterns
+        
+        # Verifica se tem a coluna procedimento (renomeada de "Produto/serviço")
+        # Busca por variações de encoding da coluna
+        proc_column = None
+        for col in self.sales_df.columns:
+            col_lower = str(col).lower()
+            if 'procedimento' in col_lower or ('produto' in col_lower and 'servi' in col_lower):
+                proc_column = col
+                break
+        
+        if proc_column is None:
+            logger.warning(f"Coluna de procedimento não encontrada no DataFrame de vendas")
+            logger.warning(f"Colunas disponíveis: {self.sales_df.columns.tolist()}")
+            return 0.0
+        
+        # Filtra vendas de vacinas e testes
+        mask = self.sales_df[proc_column].apply(
+            lambda x: any(pattern.lower() in str(x).lower() for pattern in all_patterns) if pd.notna(x) else False
+        )
+        
+        vaccine_test_sales = self.sales_df[mask]
+        
+        # Soma os valores da coluna Líquido
+        if 'Líquido' in vaccine_test_sales.columns:
+            try:
+                revenue_series = pd.to_numeric(vaccine_test_sales['Líquido'], errors='coerce')
+                total_revenue = revenue_series.sum()
+                
+                # Se for NaN, retorna 0
+                if pd.isna(total_revenue):
+                    total_revenue = 0.0
+                    
+                logger.info(f"Valor arrecadado com vacinas e testes: R$ {total_revenue:.2f}")
+                logger.info(f"Total de vendas de vacinas/testes encontradas: {len(vaccine_test_sales)}")
+                
+            except Exception as e:
+                logger.error(f"Erro ao calcular receita: {e}")
+                total_revenue = 0.0
+        else:
+            logger.warning("Coluna 'Líquido' não encontrada no DataFrame de vendas")
+        
+        return total_revenue
     
     def process_vaccines_and_tests(self):
         """Processa os dados de vacinas e testes."""
@@ -282,6 +382,9 @@ class VaccineTestProcessor:
         self.data['vaccine_v3_external'] = self._count_vaccine('Triplice - V3', is_internal=False)
         self.data['vaccine_v4_external'] = self._count_vaccine('Quádrupla - V4', is_internal=False)
         self.data['vaccine_v5_external'] = self._count_vaccine('Quíntupla - V5', is_internal=False)
+        
+        # Calcula o valor arrecadado com vacinas e testes pagos
+        self.data['vaccine_test_revenue'] = self._calculate_revenue()
         
         # Log dos totais
         logger.info("="*60)

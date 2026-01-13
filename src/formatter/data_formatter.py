@@ -328,6 +328,7 @@ class CatlandFormatter:
         # Inicializa e executa o processador de vacinas e testes
         self.vaccine_test_processor = VaccineTestProcessor(
             self.year_month,
+            self.sales_df,  # Passa o DataFrame de vendas para verificar se é pago ou não
             self.downloads_folder
         )
         
@@ -380,7 +381,6 @@ class CatlandFormatter:
             
             # Lista de títulos gerais que não têm valores (apenas cabeçalhos)
             header_only_titles = [
-                "Valor arrecadado com as vacinas e testes pagos",
                 "Castrações Solidárias*", "Castrações Externas Pagas",
                 "Total de Castrações", "Custo total das castrações realizadas",
                 "Castrações - preço de custo - valor unitário",
@@ -450,6 +450,12 @@ class CatlandFormatter:
         Returns:
             Valor numérico ou None se não houver valor
         """
+        # ===== VALORES ARRECADADOS =====
+        
+        # Valor arrecadado com vacinas e testes pagos
+        if item_name == "Valor arrecadado com as vacinas e testes pagos":
+            return self.data.get('vaccine_test_revenue', 0.0)
+        
         # ===== VACINAS E TESTES =====
         
         # Testes e Vacinas Internos
