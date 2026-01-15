@@ -10,10 +10,10 @@ Antes de executar:
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-from src.scrapper.scraper import SimplesVetScraper
-from src.scrapper.config import Config
+from src.scraper.scraper import SimplesVetScraper
+from src.scraper.config import Config
 from src.formatter import format_data
-from src.scrapper.logger import logger
+from src.scraper.logger import logger
 
 if __name__ == "__main__":
     scraper = SimplesVetScraper()

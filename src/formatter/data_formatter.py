@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
-from ..scrapper.logger import logger
+from ..scraper.logger import logger
 from .vaccine_test_processor import VaccineTestProcessor
 
 

@@ -8,7 +8,7 @@ calculando os totais conforme os critérios especificados.
 
 import pandas as pd
 from typing import Dict, Tuple
-from ..scrapper.logger import logger
+from ..scraper.logger import logger
 
 
 class VaccineTestProcessor:
