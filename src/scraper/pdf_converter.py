@@ -77,6 +77,7 @@ class PDFConverter:
     def _extract_appointments_from_pdf(self, pdf_path: str) -> List[Dict]:
         """Extrai dados de agendamentos do PDF"""
         appointments = []
+        last_vet = ''  # Armazena o último veterinário encontrado
         
         try:
             with pdfplumber.open(pdf_path) as pdf:
@@ -95,20 +96,37 @@ class PDFConverter:
                         text = page.extract_text()
                         veterinarios = self._extract_veterinario_names(text)
                         
+                        # Se não encontrou veterinários nesta página, usa o último conhecido
+                        if not veterinarios and last_vet:
+                            veterinarios = [last_vet]
+                            logger.info(f"Usando veterinário da página anterior: {last_vet}")
+                        
                         vet_index = 0
                         for table_idx, table in enumerate(tables):
                             if not table or len(table) < 2:
                                 continue
                             
-                            # Pega o nome do veterinário correspondente
-                            veterinario = veterinarios[vet_index] if vet_index < len(veterinarios) else ''
+                            # Verifica se a tabela tem cabeçalho para decidir qual veterinário usar
+                            has_header = self._table_has_header(table)
+                            
+                            if has_header:
+                                # Tabela com cabeçalho = novo veterinário
+                                veterinario = veterinarios[vet_index] if vet_index < len(veterinarios) else last_vet
+                                vet_index += 1
+                            else:
+                                # Tabela sem cabeçalho = continuação do veterinário anterior
+                                veterinario = last_vet
+                                logger.info(f"Tabela sem cabeçalho - usando veterinário anterior: {veterinario}")
+                            
+                            # Atualiza o último veterinário conhecido
+                            if veterinario:
+                                last_vet = veterinario
                             
                             # Processa a tabela
-                            table_appointments = self._parse_simplesvet_table(table, veterinario)
+                            table_appointments = self._parse_simplesvet_table(table, veterinario, page_num + 1)
                             appointments.extend(table_appointments)
                             
                             logger.info(f"Tabela {table_idx + 1}: {len(table_appointments)} agendamentos extraídos")
-                            vet_index += 1
                     else:
                         logger.warning("Nenhuma tabela encontrada na página")
                     
@@ -129,18 +147,38 @@ class PDFConverter:
         for line in lines:
             line = line.strip()
             # Veterinários geralmente estão em linhas com fundo colorido, em maiúsculas
-            if line.isupper() and len(line) > 5 and not any(x in line.lower() for x in ['cliente', 'animal', 'data', 'hora', 'status', 'agenda']):
+            # Filtros: 
+            # - Deve estar em maiúsculas
+            # - Deve ter mais de 5 caracteres
+            # - NÃO deve conter palavras de cabeçalho
+            # - NÃO deve conter nomes de vacinas/procedimentos (V3, V4, V5, FIV, FELV, etc)
+            if (line.isupper() and 
+                len(line) > 5 and 
+                not any(x in line.lower() for x in ['cliente', 'animal', 'data', 'hora', 'status', 'agenda']) and
+                not any(x in line.upper() for x in ['V3', 'V4', 'V5', 'FIV', 'FELV', 'RAIVA', 'VACINA'])):
                 veterinarios.append(line)
         
         logger.info(f"Veterinários encontrados: {veterinarios}")
         return veterinarios
     
-    def _parse_simplesvet_table(self, table: List[List], veterinario: str = '') -> List[Dict]:
+    def _table_has_header(self, table: List[List]) -> bool:
+        """Verifica se uma tabela tem cabeçalho"""
+        if not table or len(table) < 1:
+            return False
+        
+        # Procura pela linha de cabeçalho (contém "Cliente", "Animal", etc)
+        for row in table[:3]:  # Verifica apenas as 3 primeiras linhas
+            if row and any(cell and 'cliente' in str(cell).lower() for cell in row):
+                return True
+        
+        return False
+    
+    def _parse_simplesvet_table(self, table: List[List], veterinario: str = '', page_num: int = 0) -> List[Dict]:
         """Processa uma tabela do SimplesVet e extrai agendamentos"""
         appointments = []
         
         try:
-            if not table or len(table) < 2:
+            if not table or len(table) < 1:
                 return appointments
             
             # Procura pela linha de cabeçalho real (contém "Cliente", "Animal", etc)
@@ -153,31 +191,42 @@ class PDFConverter:
                     headers = row
                     break
             
+            # Se não encontrou cabeçalho, assume que é continuação de página anterior
+            # Usa a estrutura padrão: Cliente, Animal, Tipo de atendimento, Data, Hora, Status
             if header_row_idx is None or headers is None:
-                logger.warning(f"Cabeçalho não encontrado na tabela. Primeira linha: {table[0] if table else 'vazio'}")
-                return appointments
-            
-            logger.info(f"Cabeçalhos encontrados na linha {header_row_idx}: {headers}")
-            
-            # Identifica índices das colunas baseado no cabeçalho
-            col_indices = {}
-            for idx, header in enumerate(headers):
-                if not header:
-                    continue
-                header_lower = str(header).strip().lower()
+                logger.info(f"Cabeçalho não encontrado na tabela (página {page_num}). Assumindo estrutura padrão de continuação.")
+                header_row_idx = -1  # Começa do início da tabela
+                # Define a estrutura padrão das colunas do SimplesVet
+                col_indices = {
+                    'cliente': 0,
+                    'animal': 1,
+                    'tipo_atendimento': 2,
+                    'data': 3,
+                    'hora': 4,
+                    'status': 5
+                }
+            else:
+                logger.info(f"Cabeçalhos encontrados na linha {header_row_idx}: {headers}")
                 
-                if 'cliente' in header_lower:
-                    col_indices['cliente'] = idx
-                elif 'animal' in header_lower:
-                    col_indices['animal'] = idx
-                elif 'tipo' in header_lower or 'atendimento' in header_lower:
-                    col_indices['tipo_atendimento'] = idx
-                elif 'data' in header_lower:
-                    col_indices['data'] = idx
-                elif 'hora' in header_lower:
-                    col_indices['hora'] = idx
-                elif 'status' in header_lower:
-                    col_indices['status'] = idx
+                # Identifica índices das colunas baseado no cabeçalho
+                col_indices = {}
+                for idx, header in enumerate(headers):
+                    if not header:
+                        continue
+                    header_lower = str(header).strip().lower()
+                    
+                    if 'cliente' in header_lower:
+                        col_indices['cliente'] = idx
+                    elif 'animal' in header_lower:
+                        col_indices['animal'] = idx
+                    elif 'tipo' in header_lower or 'atendimento' in header_lower:
+                        col_indices['tipo_atendimento'] = idx
+                    elif 'data' in header_lower:
+                        col_indices['data'] = idx
+                    elif 'hora' in header_lower:
+                        col_indices['hora'] = idx
+                    elif 'status' in header_lower:
+                        col_indices['status'] = idx
             
             logger.info(f"Mapeamento de colunas: {col_indices}")
             
