@@ -63,3 +63,5 @@ O sistema gera os seguintes arquivos na pasta `downloads/`:
   - Tipo de atendimento
   - Data e hora
   - Status do atendimento
+
+Projeto pessoal para otimizar o trabalho de coordenação na ONG Catland 🐱💗
