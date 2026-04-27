@@ -80,7 +80,13 @@ class WebDriverManager:
         options.add_argument('--window-size=1920,1080')
         options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        service = ChromeService(ChromeDriverManager().install())
+        driver_path = ChromeDriverManager().install()
+        # Fix: webdriver-manager retorna caminho errado, corrigir para o executável correto
+        if not driver_path.endswith('.exe'):
+            driver_dir = os.path.dirname(driver_path)
+            driver_path = os.path.join(driver_dir, 'chromedriver.exe')
+        
+        service = ChromeService(driver_path)
         self.driver = webdriver.Chrome(service=service, options=options)
     
     def _get_download_directory(self) -> Optional[str]:

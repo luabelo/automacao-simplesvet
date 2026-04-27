@@ -8,7 +8,6 @@ from .config import Config
 from .webdriver_manager import WebDriverManager
 
 # Suprime warnings do pandas
-warnings.filterwarnings('ignore', category=pd.errors.SettingWithCopyWarning)
 warnings.filterwarnings('ignore', message='.*SettingWithCopyWarning.*')
 
 class VendaExtractor:
